@@ -37,6 +37,25 @@ Inside a container, `localhost` refers to the container itself, not the host mac
 
 This applies to all environment variables, configuration files, and code that references service hosts.
 
+## Videos (Phase 03 — Upload e Processamento)
+
+O backend tem um módulo de vídeos em `nestjs-project/src/videos/` com infraestrutura de fila, object storage e worker:
+
+- **Módulo `videos`:** entidade `Video` (tabela `videos`) ligada ao canal (`channel_id`), status enum `video_status` (`draft` → `uploading` → `processing` → `ready` | `error`), slug único por vídeo, chaves de storage (`storage_key`, `thumbnail_key`), duração e metadados. Fonte: `docs/phases/phase-03-videos/phase-03-videos.md`.
+- **Endpoints** (base `/videos`):
+  - `POST /videos` — pré-cadastro do vídeo como rascunho ao iniciar o upload (JWT; canal do usuário).
+  - `POST /videos/:id/upload/initiate` — cria o multipart upload no storage e retorna as URLs pré-assinadas por part (JWT; dono do vídeo).
+  - `POST /videos/:id/upload/complete` — completa o multipart, transita para `processing` e enfileira o job `process-video` (JWT; dono).
+  - `GET /videos/:slug` — metadata pública (URL única por vídeo, slug com UNIQUE).
+  - `GET /videos/:slug/stream` — streaming por Range requests (`206 Partial Content`).
+  - `GET /videos/:slug/thumbnail` — thumbnail JPEG.
+  - `GET /videos/:slug/download` — URL pré-assinada de download.
+- **Object storage (S3/MinIO):** cliente AWS SDK v3 com `forcePathStyle: true`; bucket `streamtube` criado idempotentemente (`ObjectStorageService.ensureBucket`); chaves `videos/{videoId}/{slug}` e `thumbnails/{videoId}.jpg`; upload de até 10GB via multipart com URLs pré-assinadas — os bytes nunca passam pela API.
+- **Fila (BullMQ/Redis):** queue `video-processing`, job `process-video` `{ videoId }` com `attempts: 3` e backoff exponencial; produtor no `POST /videos/:id/upload/complete`, consumidor no worker.
+- **Worker (container `worker`):** aplicação NestJS standalone (`src/worker.ts` → `WorkerModule`) com `@Processor('video-processing')`; usa FFmpeg/ffprobe via `fluent-ffmpeg` para extrair duração/metadados e gerar thumbnail; transiciona `processing → ready | error` (só marca `error` quando os retries esgotam, persistindo `processing_error`).
+- **Docker Compose:** serviços `redis`, `minio` e `worker` adicionados em `nestjs-project/compose.yaml`; imagem do worker (`Dockerfile.worker.dev`) instala `ffmpeg`. Portas de host: db `5433`, redis `6380`, minio `9000`/`9001` (5432/6379 podem estar ocupados por outros projetos locais). Conexões internas usam nomes de serviço (`db`, `redis`, `minio`).
+- **Env vars:** `MINIO_ENDPOINT`, `MINIO_REGION`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `STORAGE_BUCKET`, `REDIS_HOST`, `REDIS_PORT`, `VIDEOS_PART_SIZE` — validados em `src/config/env.validation.ts` e injetados via `compose.yaml`.
+
 ## Working Principles
 
 - **Single Responsibility:** each module, service, and function should have a clear, focused responsibility. Re-evaluate adherence at every step — when a module starts owning logic or entities that are not its own (e.g., a service creating an entity from another domain), extract it immediately into the proper module instead of deferring to a later corrective task.

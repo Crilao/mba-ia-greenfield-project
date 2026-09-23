@@ -1,0 +1,10 @@
+export const VIDEO_QUEUE = 'video-processing';
+export const VIDEO_PROCESS_JOB = 'process-video';
+export const STORAGE_PREFIX_VIDEOS = 'videos';
+export const STORAGE_PREFIX_THUMBNAILS = 'thumbnails';
+export const SLUG_BYTES = 8;
+export const MAX_SLUG_RETRIES = 5;
+export const THUMBNAIL_EXTENSION = 'jpg';
+export const THUMBNAIL_CONTENT_TYPE = 'image/jpeg';
+export const VIDEO_PROCESS_JOB_ATTEMPTS = 3;
+export const VIDEO_PROCESS_JOB_BACKOFF_DELAY_MS = 2000;
