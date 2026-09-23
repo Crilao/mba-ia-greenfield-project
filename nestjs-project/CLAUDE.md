@@ -33,7 +33,13 @@ docker compose exec nestjs-api npm run start:dev
 
 Services:
 - `nestjs-api` — NestJS API, port `3000`
-- `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `worker` — NestJS standalone worker (BullMQ processor + FFmpeg), sem porta HTTP
+- `db` — PostgreSQL 17, host port `5433` (container `5432`), database `streamtube`, user/password `streamtube`
+- `redis` — Redis 7 (BullMQ), host port `6380` (container `6379`)
+- `minio` — S3-compatible object storage, host ports `9000` (API) / `9001` (console), credenciais `minioadmin`/`minioadmin`
+- `mailpit` — SMTP test server, ports `1025` / `8025`
+
+> Host portas de `db`/`redis` foram remapeadas (`5433`/`6380`) porque `5432`/`6379` podem estar ocupados por outros projetos locais. As conexões entre containers usam sempre os nomes de serviço (`db`, `redis`, `minio`), nunca `localhost`.
 
 All verification and teardown commands run on the **host machine**:
 
@@ -148,6 +154,8 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 
 - Each domain feature gets its own module (e.g., `UsersModule`, `VideosModule`) registered in `AppModule`
 - Controllers handle HTTP routing; Services hold business logic; both are scoped to their module
+- **Videos (Fase 03):** `src/videos/` implementa pré-cadastro, upload multipart pré-assinado (MinIO), streaming por Range, thumbnail e download; a fila BullMQ (`video-processing`) é consumida pelo worker standalone em `src/worker.ts` (`WorkerModule`), que roda FFmpeg/ffprobe (`fluent-ffmpeg`) e atualiza o `Video`. Storage: `src/videos/storage/object-storage.service.ts` (AWS SDK v3 apontando para o MinIO).
+- **Worker standalone:** `src/worker.ts` sobe o `WorkerModule` via `NestFactory.createApplicationContext` — não expõe HTTP. Para rodar o processamento, o serviço `worker` do Compose executa `npm run start:worker` (`nest start --entryFile worker`).
 
 ## Code Conventions
 

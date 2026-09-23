@@ -1,22 +1,67 @@
+x-streamtube-env: &streamtube-env
+  NODE_ENV: development
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_USERNAME: streamtube
+  DB_PASSWORD: streamtube
+  DB_NAME: streamtube
+  JWT_SECRET: streamtube-dev-jwt-secret
+  JWT_REFRESH_SECRET: streamtube-dev-jwt-refresh-secret
+  JWT_ACCESS_EXPIRATION: 15m
+  JWT_REFRESH_EXPIRATION: 7d
+  APP_URL: http://localhost:3000
+  MAIL_HOST: mailpit
+  MAIL_PORT: 1025
+  MAIL_FROM: "StreamTube <noreply@streamtube.com>"
+  SWAGGER_ENABLED: "true"
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  MINIO_ENDPOINT: http://minio:9000
+  MINIO_ACCESS_KEY: minioadmin
+  MINIO_SECRET_KEY: minioadmin
+  STORAGE_BUCKET: streamtube
+
 services:
   nestjs-api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile.dev
     ports:
       - 3000:3000
     volumes:
       - .:/home/node/app
+    environment: *streamtube-env
     depends_on:
       db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
       mailpit:
         condition: service_started
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker.dev
+    volumes:
+      - .:/home/node/app
+    command: ["sh", "-c", "npm run start:worker"]
+    environment: *streamtube-env
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
   db:
     image: postgres:17
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       - POSTGRES_USER=streamtube
       - POSTGRES_PASSWORD=streamtube
@@ -27,10 +72,35 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: quay.io/minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: ["server", "/data", "--console-address", ":9001"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   mailpit:
     image: axllent/mailpit
     ports:
       - "1025:1025"
       - "8025:8025"
-
-

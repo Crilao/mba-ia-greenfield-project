@@ -7,9 +7,11 @@ import {
 } from '../test/create-test-data-source';
 import { User } from '../users/entities/user.entity';
 import { ChannelsService } from './channels.service';
-import { Channel } from './entities/channel.entity';
 
-const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken];
+import { Channel } from './entities/channel.entity';
+import { Video } from '../videos/entities/video.entity';
+
+const ALL_ENTITIES = [User, Channel, Video, RefreshToken, VerificationToken];
 
 describe('ChannelsService (integration)', () => {
   let dataSource: DataSource;
